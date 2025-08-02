@@ -67,7 +67,7 @@ SUPPORT_CHANNEL = os.getenv("SUPPORT_CHANNEL", "https://t.me/ganaasupport")
 SUPPORT_GROUP = os.getenv("SUPPORT_GROUP", "https://t.me/ganaasupport")
 INSTAGRAM = os.getenv("INSTAGRAM", "https://t.me/oy_baby")
 YOUTUBE = os.getenv("YOUTUBE", "https://t.me/oy_baby")
-GITHUB = os.getenv("GITHUB", "https://t.me/oy_baby")
+GITHUB = os.getenv("GITHUB", "https://github.com/rishubbu")
 DONATE = os.getenv("DONATE", "https://t.me/allselleer/2")
 PRIVACY_LINK = os.getenv("PRIVACY_LINK", "https://t.me/allselleer/2")
 
