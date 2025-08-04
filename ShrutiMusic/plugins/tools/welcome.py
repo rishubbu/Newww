@@ -1,24 +1,36 @@
-import os
-from unidecode import unidecode
-from PIL import ImageDraw, Image, ImageFont, ImageChops
-from pyrogram import *
-from pyrogram.types import *
+import asyncio
+import time
 from logging import getLogger
-from ShrutiMusic import LOGGER
-from pyrogram.types import Message
-from ShrutiMusic.misc import SUDOERS
-from ShrutiMusic import app
-from ShrutiMusic.utils.database import *
-from ShrutiMusic.utils.database import db
+from time import time
 
-# Welcome collection
-try:
-    wlcm = db.welcome
-except:
-    # Alternative database import
-    from ShrutiMusic.utils.database import welcome as wlcm
+from PIL import Image, ImageChops, ImageDraw, ImageEnhance, ImageFont
+from pyrogram import enums, filters
+from pyrogram.types import ChatMemberUpdated
+
+from SONALI import app
+from SONALI.utils.database import get_assistant
 
 LOGGER = getLogger(__name__)
+
+
+class AWelDatabase:
+    def __init__(self):
+        self.data = {}
+
+    async def find_one(self, chat_id):
+        return chat_id in self.data
+
+    async def add_wlcm(self, chat_id):
+        if chat_id not in self.data:
+            self.data[chat_id] = {"state": "on"}  # Default state is "on"
+
+    async def rm_wlcm(self, chat_id):
+        if chat_id in self.data:
+            del self.data[chat_id]
+
+
+wlcm = AWelDatabase()
+
 
 class temp:
     ME = None
@@ -28,142 +40,94 @@ class temp:
     U_NAME = None
     B_NAME = None
 
-def circle(pfp, size=(450, 450)):
-    pfp = pfp.resize(size, Image.LANCZOS).convert("RGBA")
-    bigsize = (pfp.size[0] * 3, pfp.size[1] * 3)
-    mask = Image.new("L", bigsize, 0)
-    draw = ImageDraw.Draw(mask)
-    draw.ellipse((0, 0) + bigsize, fill=255)
-    mask = mask.resize(pfp.size, Image.LANCZOS)
-    mask = ImageChops.darker(mask, pfp.split()[-1])
-    pfp.putalpha(mask)
-    return pfp
+# Define a dictionary to track the last message timestamp for each user
+user_last_message_time = {}
+user_command_count = {}
+# Define the threshold for command spamming (e.g., 20 commands within 60 seconds)
+SPAM_THRESHOLD = 2
+SPAM_WINDOW_SECONDS = 5
 
-def welcomepic(pic, user, chat, id, uname):
-    background = Image.open("ShrutiMusic/assets/welcome.png")
-    pfp = Image.open(pic).convert("RGBA")
-    pfp = circle(pfp)
-    pfp = pfp.resize((450, 450)) 
-    draw = ImageDraw.Draw(background)
-    font = ImageFont.truetype('ShrutiMusic/assets/font.ttf', size=45)
-    font2 = ImageFont.truetype('ShrutiMusic/assets/font.ttf', size=90)
-    draw.text((65, 250), f'NAME : {unidecode(user)}', fill="white", font=font)
-    draw.text((65, 340), f'ID : {id}', fill="white", font=font)
-    draw.text((65, 430), f"USERNAME : {uname}", fill="white", font=font)
-    pfp_position = (767, 133)  
-    background.paste(pfp, pfp_position, pfp)  
-    background.save(f"downloads/welcome#{id}.png")
-    return f"downloads/welcome#{id}.png"
 
-# ✅ `/welcome` Command: Enable/Disable Special Welcome
-@app.on_message(filters.command("welcome") & ~filters.private)
+@app.on_message(filters.command("awelcome") & ~filters.private)
 async def auto_state(_, message):
-    usage = "**❖ ᴜsᴀɢᴇ ➥** /welcome [on|off]"
+    user_id = message.from_user.id
+    current_time = time()
+    # Update the last message timestamp for the user
+    last_message_time = user_last_message_time.get(user_id, 0)
+
+    if current_time - last_message_time < SPAM_WINDOW_SECONDS:
+        # If less than the spam window time has passed since the last message
+        user_last_message_time[user_id] = current_time
+        user_command_count[user_id] = user_command_count.get(user_id, 0) + 1
+        if user_command_count[user_id] > SPAM_THRESHOLD:
+            # Block the user if they exceed the threshold
+            hu = await message.reply_text(
+                f"{message.from_user.mention} ᴘʟᴇᴀsᴇ ᴅᴏɴᴛ ᴅᴏ sᴘᴀᴍ, ᴀɴᴅ ᴛʀʏ ᴀɢᴀɪɴ ᴀғᴛᴇʀ 5 sᴇᴄ"
+            )
+            await asyncio.sleep(3)
+            await hu.delete()
+            return
+    else:
+        # If more than the spam window time has passed, reset the command count and update the message timestamp
+        user_command_count[user_id] = 1
+        user_last_message_time[user_id] = current_time
+
+    usage = "ᴜsᴀɢᴇ:\n⦿ /awelcome [on|off]"
     if len(message.command) == 1:
         return await message.reply_text(usage)
-
     chat_id = message.chat.id
     user = await app.get_chat_member(message.chat.id, message.from_user.id)
-
-    if user.status in (enums.ChatMemberStatus.ADMINISTRATOR, enums.ChatMemberStatus.OWNER):
-        A = await wlcm.find_one({"chat_id": chat_id})
+    if user.status in (
+        enums.ChatMemberStatus.ADMINISTRATOR,
+        enums.ChatMemberStatus.OWNER,
+    ):
+        A = await wlcm.find_one(chat_id)
         state = message.text.split(None, 1)[1].strip().lower()
-
-        if state == "on":
-            if A and not A.get("disabled", False):
-                return await message.reply_text("✦ Special Welcome Already Enabled")
-            await wlcm.update_one({"chat_id": chat_id}, {"$set": {"disabled": False}}, upsert=True)
-            await message.reply_text(f"✦ Enabled Special Welcome in {message.chat.title}")
-
-        elif state == "off":
-            if A and A.get("disabled", False):
-                return await message.reply_text("✦ Special Welcome Already Disabled")
-            await wlcm.update_one({"chat_id": chat_id}, {"$set": {"disabled": True}}, upsert=True)
-            await message.reply_text(f"✦ Disabled Special Welcome in {message.chat.title}")
-
+        if state == "off":
+            if A:
+                await message.reply_text(
+                    "ᴀssɪsᴛᴀɴᴛ ᴡᴇʟᴄᴏᴍᴇ ɴᴏᴛɪғɪᴄᴀᴛɪᴏɴ ᴀʟʀᴇᴀᴅʏ ᴅɪsᴀʙʟᴇᴅ !"
+                )
+            else:
+                await wlcm.add_wlcm(chat_id)
+                await message.reply_text(
+                    f"ᴅɪsᴀʙʟᴇᴅ ᴡᴇʟᴄᴏᴍᴇ ɴᴏᴛɪғɪᴄᴀᴛɪᴏɴ ɪɴ {message.chat.title} ʙʏ ᴀssɪsᴛᴀɴᴛ"
+                )
+        elif state == "on":
+            if not A:
+                await message.reply_text("ᴇɴᴀʙʟᴇᴅ ᴀssɪsᴛᴀɴᴛ ᴡᴇʟᴄᴏᴍᴇ ɴᴏᴛɪғɪᴄᴀᴛɪᴏɴ.")
+            else:
+                await wlcm.rm_wlcm(chat_id)
+                await message.reply_text(
+                    f"ᴇɴᴀʙʟᴇᴅ ᴀssɪsᴛᴀɴᴛ ᴡᴇʟᴄᴏᴍᴇ ɴᴏᴛɪғɪᴄᴀᴛɪᴏɴ ɪɴ  {message.chat.title}"
+                )
         else:
             await message.reply_text(usage)
     else:
-        await message.reply("✦ Only Admins Can Use This Command")
+        await message.reply(
+            "sᴏʀʀʏ ᴏɴʟʏ ᴀᴅᴍɪɴs ᴄᴀɴ ᴇɴᴀʙʟᴇ ᴀssɪsᴛᴀɴᴛ ᴡᴇʟᴄᴏᴍᴇ ɴᴏᴛɪғɪᴄᴀᴛɪᴏɴ!"
+        )
 
-# ✅ Special Welcome Message (By Default ON)
-@app.on_chat_member_updated(filters.group, group=-3)
-async def greet_group(_, member: ChatMemberUpdated):
-    chat_id = member.chat.id
-    A = await wlcm.find_one({"chat_id": chat_id})
 
-    # ✅ Default ON: Lekin agar disable kiya gaya hai to OFF rahe
-    if A and A.get("disabled", False):  
-        return  # Agar OFF hai, to kuch mat karo
-
-    if (
-        not member.new_chat_member
-        or member.new_chat_member.status in {"banned", "left", "restricted"}
-        or member.old_chat_member
-    ):
-        return
-
-    user = member.new_chat_member.user if member.new_chat_member else member.from_user
+@app.on_chat_member_updated(filters.group, group=5)
+async def greet_new_members(_, member: ChatMemberUpdated):
     try:
-        pic = await app.download_media(
-            user.photo.big_file_id, file_name=f"pp{user.id}.png"
-        )
-    except AttributeError:
-        pic = "ShrutiMusic/assets/upic.png"
+        chat_id = member.chat.id
+        chat_name = (await app.get_chat(chat_id)).title  # Fetch the chat name correctly
+        userbot = await get_assistant(chat_id)
+        count = await app.get_chat_members_count(chat_id)
+        A = await wlcm.find_one(chat_id)
+        if A:
+            return
 
-    if (temp.MELCOW).get(f"welcome-{member.chat.id}") is not None:
-        try:
-            await temp.MELCOW[f"welcome-{member.chat.id}"].delete()
-        except Exception as e:
-            LOGGER.error(e)
-
-    try:
-        welcomeimg = welcomepic(
-            pic, user.first_name, member.chat.title, user.id, user.username
-        )
-        temp.MELCOW[f"welcome-{member.chat.id}"] = await app.send_photo(
-            member.chat.id,
-            photo=welcomeimg,
-            caption=f"""
-🌸✨ ──────────────────── ✨🌸
-
-         🎊 <b>ᴡᴇʟᴄᴏᴍᴇ ᴛᴏ ᴏᴜʀ ғᴀᴍɪʟʏ</b> 🎊
-
-🌹 <b>ɴᴀᴍᴇ</b> ➤ {user.mention}
-🌺 <b>ᴜsᴇʀɴᴀᴍᴇ</b> ➤ @{user.username if user.username else "ɴᴏᴛ sᴇᴛ"}
-🆔 <b>ᴜsᴇʀ ɪᴅ</b> ➤ <code>{user.id}</code>
-🏠 <b>ɢʀᴏᴜᴘ</b> ➤ {member.chat.title}
-
-═════════════════════════
-
-💕 <b>ᴡᴇ'ʀᴇ sᴏ ʜᴀᴘᴘʏ ᴛᴏ ʜᴀᴠᴇ ʏᴏᴜ ʜᴇʀᴇ!</b> 
-🎵 <b>ᴇɴᴊᴏʏ ᴛʜᴇ ʙᴇsᴛ ᴍᴜsɪᴄ ᴇxᴘᴇʀɪᴇɴᴄᴇ</b> 🎵
-
-✨ <b>ғᴇᴇʟ ғʀᴇᴇ ᴛᴏ sʜᴀʀᴇ ᴀɴᴅ ᴇɴᴊᴏʏ!</b> ✨
-
-<blockquote><b>💝 ᴘᴏᴡᴇʀᴇᴅ ʙʏ ➤ <a href="https://t.me/{app.username}?start=help">Mᴜsɪᴄ ʙᴏᴛs🎶💖</a></b></blockquote>
-
-🌸✨ ──────────────────── ✨🌸
-""",
-            reply_markup=InlineKeyboardMarkup([
-                [InlineKeyboardButton("🎵 ᴀᴅᴅ ᴍᴇ ɪɴ ʏᴏᴜʀ ɢʀᴏᴜᴘ 🎵", url=f"https://t.me/{app.username}?startgroup=True")]
-            ]),
+        user = (
+            member.new_chat_member.user if member.new_chat_member else member.from_user
         )
 
+        # Add the modified condition here
+        if member.new_chat_member and not member.old_chat_member:
+            welcome_text =  f"""**⛳️ 𝐖ᴇʟᴄᴏᴍᴇ 𝐓ᴏ 𝐎ᴜʀ 𝐆ʀᴏᴜᴘ ⛳️**  \n**┏━━━━━━━━🧸━━━━━━━┓**\n         **[˹𝐆𝐀𝐍𝐀 𝐌ᴜ𝛅ɪᴄ˼]**\n**┗━━━━━━━━🧸━━━━━━━┛**\n**➤ 𝐍ᴀᴍᴇ 🖤 ◂⚚▸**  {user.mention} 💤 ❤️\n**➤ 𝐔ꜱᴇʀ 𝐈ᴅ 🖤 ◂⚚▸** {user.id} ❤️🧿\n**➤ 𝐔ꜱᴇʀɴᴀᴍᴇ 🖤 ◂⚚▸**  @{user.username}  ❤️🌎\n**➤ 𝐌ᴇᴍʙᴇʀs 🖤 ◂⚚▸**  {count} ❤️🍂"""
+            await asyncio.sleep(3)
+            await userbot.send_message(chat_id, text=welcome_text)
     except Exception as e:
-        LOGGER.error(e)
-
-    try:
-        os.remove(f"downloads/welcome#{user.id}.png")
-        os.remove(f"downloads/pp{user.id}.png")
-    except Exception:
-        pass
-
-
-# ©️ Copyright Reserved - @NoxxOP  Nand Yaduwanshi
-
-# ===========================================
-# ©️ 2025 Nand Yaduwanshi (aka @NoxxOP)
-# 🔗 GitHub : https://github.com/NoxxOP/ShrutiMusic
-# 📢 Telegram Channel : https://t.me/ShrutiBots
-# ===========================================
+        return
