@@ -1,116 +1,166 @@
-import os
+import os 
 import random
-from datetime import datetime
+from datetime import datetime 
 from telegraph import upload_file
-from PIL import Image, ImageDraw, ImageFilter
-from pyrogram import Client, filters
-from pyrogram.types import InlineKeyboardMarkup, InlineKeyboardButton
-from pyrogram.enums import ChatType
+from PIL import Image , ImageDraw
+from pyrogram import *
+from pyrogram.types import InlineKeyboardButton, InlineKeyboardMarkup
+from pyrogram.enums import *
 
-from ShrutiMusic import app
-from ShrutiMusic.mongo.couples_db import _get_image, get_couple  # Optional DB imports
+#BOT FILE NAME
+from ShrutiMusic import app as app
+from ShrutiMusic.mongo.couples_db import _get_image, get_couple
 
-# Constants
 POLICE = [
     [
         InlineKeyboardButton(
-            text="✨ Official Channel ✨",
-            url="https://t.me/oy_baby",
-        )
-    ]
+            text="|| ˹𖤍 𐏓𝙍𝙄𝙎𝙃𝘼𝙉𝙏 ⚡[𝘼𝙇𝙀𝙍𝙏] ⏤͟͞𐏓💀 𖤍˼ ||",
+            url=f"https://t.me/oy_baby",
+        ),
+    ],
 ]
 
-COUPLE_EMOJIS = ["💞", "❤️", "💘", "💖", "💑", "💕", "💓", "💝"]
 
-def get_today():
-    return datetime.now().strftime("%d/%m/%Y")
+def dt():
+    now = datetime.now()
+    dt_string = now.strftime("%d/%m/%Y %H:%M")
+    dt_list = dt_string.split(" ")
+    return dt_list
 
-def get_tomorrow():
-    tomorrow = datetime.now().replace(day=datetime.now().day + 1)
-    return tomorrow.strftime("%d/%m/%Y")
+
+def dt_tom():
+    a = (
+        str(int(dt()[0].split("/")[0]) + 1)
+        + "/"
+        + dt()[0].split("/")[1]
+        + "/"
+        + dt()[0].split("/")[2]
+    )
+    return a
+
+tomorrow = str(dt_tom())
+today = str(dt()[0])
 
 @app.on_message(filters.command("couples"))
-async def show_couples(_, message):
+async def ctest(_, message):
     cid = message.chat.id
     if message.chat.type == ChatType.PRIVATE:
-        return await message.reply_text("❌ This command only works in groups.")
-
+        return await message.reply_text("ᴛʜɪs ᴄᴏᴍᴍᴀɴᴅ ᴏɴʟʏ ᴡᴏʀᴋs ɪɴ ɢʀᴏᴜᴘs.")
     try:
-        msg = await message.reply_text("🔍 Picking the most romantic couple...")
+     #  is_selected = await get_couple(cid, today)
+     #  if not is_selected:
+         msg = await message.reply_text("ɢᴇɴᴇʀᴀᴛɪɴɢ ᴄᴏᴜᴘʟᴇs ɪᴍᴀɢᴇ...")
+         #GET LIST OF USERS
+         list_of_users = []
 
-        users = []
-        async for member in app.get_chat_members(cid, limit=60):
-            if not member.user.is_bot:
-                users.append(member.user.id)
+         async for i in app.get_chat_members(message.chat.id, limit=50):
+             if not i.user.is_bot:
+               list_of_users.append(i.user.id)
 
-        if len(users) < 2:
-            return await msg.edit("Not enough users to create a couple.")
+         c1_id = random.choice(list_of_users)
+         c2_id = random.choice(list_of_users)
+         while c1_id == c2_id:
+              c1_id = random.choice(list_of_users)
 
-        c1_id, c2_id = random.sample(users, 2)
-        c1_user = await app.get_users(c1_id)
-        c2_user = await app.get_users(c2_id)
 
-        photo1 = (await app.get_chat(c1_id)).photo
-        photo2 = (await app.get_chat(c2_id)).photo
+         photo1 = (await app.get_chat(c1_id)).photo
+         photo2 = (await app.get_chat(c2_id)).photo
 
-        try:
-            p1 = await app.download_media(photo1.big_file_id, file_name="pfp1.png")
-        except:
-            p1 = "SONALI/assets/upic.png"
-        try:
-            p2 = await app.download_media(photo2.big_file_id, file_name="pfp2.png")
-        except:
+         N1 = (await app.get_users(c1_id)).mention 
+         N2 = (await app.get_users(c2_id)).mention
+
+         try:
+            p1 = await app.download_media(photo1.big_file_id, file_name="pfp.png")
+         except Exception:
+            p1 = "ShrutiMusic/assets/upic.png"
+         try:
+            p2 = await app.download_media(photo2.big_file_id, file_name="pfp1.png")
+         except Exception:
             p2 = "ShrutiMusic/assets/upic.png"
 
-        # Load and prepare images
-        img = Image.open("ShrutiMusic/assets/cppic.png")
-        img1 = Image.open(p1).resize((437, 437))
-        img2 = Image.open(p2).resize((437, 437))
+         img1 = Image.open(f"{p1}")
+         img2 = Image.open(f"{p2}")
 
-        def crop_circle(im):
-            mask = Image.new('L', im.size, 0)
-            draw = ImageDraw.Draw(mask)
-            draw.ellipse((0, 0) + im.size, fill=255)
-            im.putalpha(mask)
-            return im
+         img = Image.open("ShrutiMusic/assets/cppic.png")
 
-        img1 = crop_circle(img1)
-        img2 = crop_circle(img2)
+         img1 = img1.resize((437,437))
+         img2 = img2.resize((437,437))
 
-        img.paste(img1, (116, 160), img1)
-        img.paste(img2, (789, 160), img2)
-        final_path = f"test_{cid}.png"
-        img.save(final_path)
+         mask = Image.new('L', img1.size, 0)
+         draw = ImageDraw.Draw(mask) 
+         draw.ellipse((0, 0) + img1.size, fill=255)
 
-        couple_emoji = random.choice(COUPLE_EMOJIS)
-        text = f"""
-🌟 **Couple of the Day** 🌟
+         mask1 = Image.new('L', img2.size, 0)
+         draw = ImageDraw.Draw(mask1) 
+         draw.ellipse((0, 0) + img2.size, fill=255)
 
-{c1_user.mention} + {c2_user.mention} = {couple_emoji}
 
-🕒 Next lucky couple will be selected on **{get_tomorrow()}**!
+         img1.putalpha(mask)
+         img2.putalpha(mask1)
+
+         draw = ImageDraw.Draw(img)
+
+         img.paste(img1, (116, 160), img1)
+         img.paste(img2, (789, 160), img2)
+
+         img.save(f'test_{cid}.png')
+
+         TXT = f"""
+**ᴛᴏᴅᴀʏ's ᴄᴏᴜᴘʟᴇ ᴏғ ᴛʜᴇ ᴅᴀʏ :
+
+{N1} + {N2} = 💚
+
+ɴᴇxᴛ ᴄᴏᴜᴘʟᴇs ᴡɪʟʟ ʙᴇ sᴇʟᴇᴄᴛᴇᴅ ᴏɴ {tomorrow} !!**
 """
 
-        await message.reply_photo(final_path, caption=text, reply_markup=InlineKeyboardMarkup(POLICE))
-        await msg.delete()
+         await message.reply_photo(f"test_{cid}.png", caption=TXT, reply_markup=InlineKeyboardMarkup(POLICE),
+    )
+         await msg.delete()
+         a = upload_file(f"test_{cid}.png")
+         for x in a:
+           img = "https://graph.org/" + x
+           couple = {"c1_id": c1_id, "c2_id": c2_id}
+          # await save_couple(cid, today, couple, img)
 
-        # Upload to Telegraph
-        try:
-            url = upload_file(final_path)[0]
-            print("Telegraph link:", "https://graph.org" + url)
-        except Exception as e:
-            print("Telegraph upload failed:", e)
 
+      # elif is_selected:
+      #   msg = await message.reply_text("𝐆ᴇᴛᴛɪɴɢ 𝐓ᴏᴅᴀʏs 𝐂ᴏᴜᴘʟᴇs 𝐈ᴍᴀɢᴇ...")
+      #   b = await _get_image(cid)
+       #  c1_id = int(is_selected["c1_id"])
+       #  c2_id = int(is_selected["c2_id"])
+       #  c1_name = (await app.get_users(c1_id)).first_name
+        # c2_name = (await app.get_users(c2_id)).first_name
+
+      #   TXT = f"""
+#**𝐓ᴏᴅᴀʏ's 𝐒ᴇʟᴇᴄᴛᴇᴅ 𝐂ᴏᴜᴘʟᴇs 🎉 :
+#➖➖➖➖➖➖➖➖➖➖➖➖
+#[{c1_name}](tg://openmessage?user_id={c1_id}) + [{c2_name}](tg://openmessage?user_id={c2_id}) = ❣️
+#➖➖➖➖➖➖➖➖➖➖➖➖
+#𝐍ᴇxᴛ 𝐂ᴏᴜᴘʟᴇs 𝐖ɪʟʟ 𝐁ᴇ 𝐒ᴇʟᴇᴄᴛᴇᴅ 𝐎ɴ {tomorrow} !!**
+#"""
+ #        await message.reply_photo(b, caption=TXT)
+        # await msg.delete()
     except Exception as e:
-        await message.reply_text("❌ An error occurred while selecting couples.")
-        print("Error:", e)
+        print(str(e))
+    try:
+      os.remove(f"./downloads/pfp1.png")
+      os.remove(f"./downloads/pfp2.png")
+      os.remove(f"test_{cid}.png")
+    except Exception:
+       pass
 
-    # Clean up
-    for file in [f"pfp1.png", f"pfp2.png", final_path]:
-        if os.path.exists(file):
-            os.remove(file)
 
 __mod__ = "COUPLES"
 __help__ = """
-💞 `/couples` - Pick a random lovely couple from the group members and show a romantic visual.
+**» /couples** - Get Todays Couples Of The Group In Interactive View
 """
+
+
+
+
+
+
+
+
+
+
