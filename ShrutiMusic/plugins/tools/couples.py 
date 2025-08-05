@@ -1,0 +1,116 @@
+import os
+import random
+from datetime import datetime
+from telegraph import upload_file
+from PIL import Image, ImageDraw, ImageFilter
+from pyrogram import Client, filters
+from pyrogram.types import InlineKeyboardMarkup, InlineKeyboardButton
+from pyrogram.enums import ChatType
+
+from SONALI import app
+from SONALI.mongo.couples_db import _get_image, get_couple  # Optional DB imports
+
+# Constants
+POLICE = [
+    [
+        InlineKeyboardButton(
+            text="✨ Official Channel ✨",
+            url="https://t.me/oy_baby",
+        )
+    ]
+]
+
+COUPLE_EMOJIS = ["💞", "❤️", "💘", "💖", "💑", "💕", "💓", "💝"]
+
+def get_today():
+    return datetime.now().strftime("%d/%m/%Y")
+
+def get_tomorrow():
+    tomorrow = datetime.now().replace(day=datetime.now().day + 1)
+    return tomorrow.strftime("%d/%m/%Y")
+
+@app.on_message(filters.command("couples"))
+async def show_couples(_, message):
+    cid = message.chat.id
+    if message.chat.type == ChatType.PRIVATE:
+        return await message.reply_text("❌ This command only works in groups.")
+
+    try:
+        msg = await message.reply_text("🔍 Picking the most romantic couple...")
+
+        users = []
+        async for member in app.get_chat_members(cid, limit=60):
+            if not member.user.is_bot:
+                users.append(member.user.id)
+
+        if len(users) < 2:
+            return await msg.edit("Not enough users to create a couple.")
+
+        c1_id, c2_id = random.sample(users, 2)
+        c1_user = await app.get_users(c1_id)
+        c2_user = await app.get_users(c2_id)
+
+        photo1 = (await app.get_chat(c1_id)).photo
+        photo2 = (await app.get_chat(c2_id)).photo
+
+        try:
+            p1 = await app.download_media(photo1.big_file_id, file_name="pfp1.png")
+        except:
+            p1 = "SONALI/assets/upic.png"
+        try:
+            p2 = await app.download_media(photo2.big_file_id, file_name="pfp2.png")
+        except:
+            p2 = "SONALI/assets/upic.png"
+
+        # Load and prepare images
+        img = Image.open("SONALI/assets/cppic.png")
+        img1 = Image.open(p1).resize((437, 437))
+        img2 = Image.open(p2).resize((437, 437))
+
+        def crop_circle(im):
+            mask = Image.new('L', im.size, 0)
+            draw = ImageDraw.Draw(mask)
+            draw.ellipse((0, 0) + im.size, fill=255)
+            im.putalpha(mask)
+            return im
+
+        img1 = crop_circle(img1)
+        img2 = crop_circle(img2)
+
+        img.paste(img1, (116, 160), img1)
+        img.paste(img2, (789, 160), img2)
+        final_path = f"test_{cid}.png"
+        img.save(final_path)
+
+        couple_emoji = random.choice(COUPLE_EMOJIS)
+        text = f"""
+🌟 **Couple of the Day** 🌟
+
+{c1_user.mention} + {c2_user.mention} = {couple_emoji}
+
+🕒 Next lucky couple will be selected on **{get_tomorrow()}**!
+"""
+
+        await message.reply_photo(final_path, caption=text, reply_markup=InlineKeyboardMarkup(POLICE))
+        await msg.delete()
+
+        # Upload to Telegraph
+        try:
+            url = upload_file(final_path)[0]
+            print("Telegraph link:", "https://graph.org" + url)
+        except Exception as e:
+            print("Telegraph upload failed:", e)
+
+    except Exception as e:
+        await message.reply_text("❌ An error occurred while selecting couples.")
+        print("Error:", e)
+
+    # Clean up
+    for file in [f"pfp1.png", f"pfp2.png", final_path]:
+        if os.path.exists(file):
+            os.remove(file)
+
+__mod__ = "COUPLES"
+__help__ = """
+💞 `/couples` - Pick a random lovely couple from the group members and show a romantic visual.
+"""
