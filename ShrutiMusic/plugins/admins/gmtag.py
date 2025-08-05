@@ -1,4 +1,4 @@
-from shurutimusic import app 
+from shrutimusic import app 
 import asyncio
 import random
 from pyrogram import Client, filters
